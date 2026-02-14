@@ -1,91 +1,28 @@
-# ---
-# Jupyter Notebook: Sales Forecasting using ARIMA
-# Author: Urmila Murri
-# Dataset: Retail Sales (Kaggle)
-# Accuracy: ~82%
-# ---
-
-# Cell 1: Import Libraries
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
-from sklearn.metrics import mean_absolute_percentage_error
-import warnings
-warnings.filterwarnings("ignore")
 
-print("Libraries imported successfully!")
+# Load dataset
+df = pd.read_csv("cleaned_sales_data.csv", parse_dates=['Order Date'])
+df = df.groupby('Order Date')['Sales'].sum().asfreq('M')
 
-# Cell 2: Load and Prepare Data
-url = "retail_sales.csv"
-df = pd.read_csv(url, parse_dates=['date'], index_col='date')
-df = df.resample('Q').sum()  # Quarterly sales
-df.head()
+# Check stationarity
+result = adfuller(df)
+print(f'ADF Statistic: {result[0]}, p-value: {result[1]}')
 
-# Cell 3: Plot Sales Trend
-plt.figure(figsize=(12, 6))
-plt.plot(df.index, df['sales'], marker='o', color='teal')
-plt.title('Quarterly Retail Sales (2015–2020)', fontsize=14, fontweight='bold')
-plt.xlabel('Quarter')
-plt.ylabel('Sales ($)')
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
+# Fit ARIMA model
+model = ARIMA(df, order=(1,1,1))  # Example order
+model_fit = model.fit()
 
-# Cell 4: Check Stationarity
-def check_stationarity(ts):
-    result = adfuller(ts)
-    print(f'ADF Statistic: {result[0]:.6f}')
-    print(f'p-value: {result[1]:.6f}')
-    return result[1] < 0.05
+# Forecast next 4 periods
+forecast = model_fit.forecast(steps=4)
+print(forecast)
 
-print("Original Series Stationary?", check_stationarity(df['sales']))
-
-# Cell 5: Differencing
-df['sales_diff'] = df['sales'].diff().dropna()
-df_diff = df['sales_diff'].dropna()
-
-plt.figure(figsize=(10, 4))
-plt.plot(df_diff, color='orange')
-plt.title('Differenced Series (Stationary)')
-plt.grid(True, alpha=0.3)
-plt.show()
-
-print("Differenced Series Stationary?", check_stationarity(df_diff))
-
-# Cell 6: Train-Test Split & Fit ARIMA
-train = df['sales'][:-4]
-test = df['sales'][-4:]
-
-model = ARIMA(train, order=(1,1,1))
-results = model.fit()
-
-# Forecast
-pred = results.forecast(steps=4)
-mape = mean_absolute_percentage_error(test, pred)
-accuracy = 100 - (mape * 100)
-
-print(f"MAPE: {mape:.1%}")
-print(f"Accuracy: {accuracy:.1f}%")
-
-# Cell 7: Final Forecast (Next 4 Quarters)
-forecast = results.forecast(steps=8)
-future_index = pd.date_range(start=df.index[-1], periods=9, freq='Q')[1:]
-
-plt.figure(figsize=(12, 6))
-plt.plot(df['sales'], label='Historical', marker='o')
-plt.plot(test.index, pred, label='Predicted (Test)', marker='x', color='red')
-plt.plot(future_index[-4:], forecast[-4:], label='Future Forecast', marker='s', color='green')
-plt.title(f'ARIMA Sales Forecast | Accuracy: {accuracy:.1f}%', fontweight='bold')
+# Plot
+plt.figure(figsize=(10,5))
+plt.plot(df, label='Historical Sales')
+plt.plot(forecast, label='Forecast', color='red')
+plt.title('Sales Forecast')
 plt.legend()
-plt.grid(True, alpha=0.3)
 plt.show()
-
-# Cell 8: Final Output
-print("\nForecasted Sales (Next 4 Quarters):")
-forecast_df = pd.DataFrame({
-    'Quarter': future_index[-4:],
-    'Forecasted Sales': forecast[-4:].round(0).astype(int)
-})
-print(forecast_df)
